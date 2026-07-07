@@ -674,6 +674,10 @@ $lastName  = $quote->customer?->last_name  ?? $quote->customer_last_name;
 $company   = $quote->customer?->company_name ?? $quote->customer_company;
 $email     = $quote->customer?->email  ?? $quote->customer_email;
 $phone     = $quote->customer?->phone  ?? $quote->customer_phone;
+$address   = $quote->customer?->address;
+$postalCode = $quote->customer?->postal_code;
+$city      = $quote->customer?->city;
+$country   = $quote->customer?->country;
 @endphp
 
 @if($preview ?? false)
@@ -805,7 +809,12 @@ $phone     = $quote->customer?->phone  ?? $quote->customer_phone;
                         —
                     @endif
                     @if($email) {{ $email }}<br> @endif
-                    @if($phone) {{ $phone }}     @endif
+                    @if($phone) {{ $phone }}<br> @endif
+                    @if($address)
+                        {{ $address }}<br>
+                        @if($postalCode || $city) {{ trim("$postalCode $city") }}<br> @endif
+                        @if($country && $country !== 'DE') {{ $country }} @endif
+                    @endif
                 </div>
             </td>
             <td>

@@ -50,6 +50,16 @@ class LexwareService
             $data['phoneNumbers'] = ['business' => [$customer->phone]];
         }
 
+        if ($customer->address || $customer->postal_code || $customer->city) {
+            $billingAddress = ['countryCode' => $customer->country ?? 'DE'];
+
+            if ($customer->address)     $billingAddress['street'] = $customer->address;
+            if ($customer->postal_code) $billingAddress['zip']    = $customer->postal_code;
+            if ($customer->city)        $billingAddress['city']   = $customer->city;
+
+            $data['addresses'] = ['billing' => [$billingAddress]];
+        }
+
         $result = $this->client->createContact($data);
         $id     = $result['id'];
 
