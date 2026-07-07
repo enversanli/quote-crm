@@ -571,6 +571,24 @@ APPLESCRIPT;
                                     Forms\Components\TextInput::make('customer_email')->label('Email')->email()->nullable(),
                                     Forms\Components\TextInput::make('customer_phone')->label('Phone')->tel()->nullable(),
 
+                                    Forms\Components\Placeholder::make('customer_address_display')
+                                        ->label('Address')
+                                        ->content(function (Forms\Get $get) {
+                                            $customer = Customer::find($get('customer_id'));
+                                            if (! $customer) {
+                                                return 'No address on file — link an existing customer to show one.';
+                                            }
+
+                                            $lines = array_filter([
+                                                $customer->address,
+                                                trim("{$customer->postal_code} {$customer->city}"),
+                                                $customer->country,
+                                            ]);
+
+                                            return $lines ? implode(', ', $lines) : 'No address on file for this customer.';
+                                        })
+                                        ->columnSpanFull(),
+
                                     Forms\Components\Actions::make([
                                         Forms\Components\Actions\Action::make('save_as_customer')
                                             ->label('Save as Customer')

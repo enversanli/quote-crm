@@ -811,19 +811,18 @@ $country   = $quote->customer?->country;
                     @if($email) {{ $email }}<br> @endif
                     @if($phone) {{ $phone }}<br> @endif
                     @if($address)
-                        {{ $address }}<br>
-                        @if($postalCode || $city) {{ trim("$postalCode $city") }}<br> @endif
-                        @if($country && $country !== 'DE') {{ $country }} @endif
+                        {{ implode(', ', array_filter([$address, trim("$postalCode $city"), ($country && $country !== 'DE') ? $country : null])) }}
                     @endif
                 </div>
             </td>
             <td>
                 <div class="info-label">{{ $t['issued_by'] }}</div>
                 <div class="info-value">
-                    <strong>Enver Sanli</strong><br>
-                    SK Eventspace GmbH<br>
+                    <strong>SK Eventspace GmbH</strong><br>
+                    Enver Sanli<br>
                     e.sanli@event-hub-checkpoint.de<br>
-                    +49 163 951 8970
+                    +49 163 951 8970 <br>
+                    Zimmerstraße 26-27, 10969 Berlin
                 </div>
             </td>
         </tr>
