@@ -91,18 +91,21 @@ class LexwareService
     /**
      * Push quote as a Lexware draft invoice (not finalized).
      */
-    public function pushDraftInvoice(Quote $quote): string
+    public function pushDraftInvoice(Quote $quote, ?array $paymentTerms = null): string
     {
         $quote->loadMissing(['customer', 'business', 'quoteLines']);
 
         $contactId = $quote->customer ? $this->pushContact($quote->customer) : null;
-        $payload   = $this->buildVoucherPayload($quote, $contactId);
+        $payload   = $this->buildVoucherPayload($quote, $contactId, includeAgreements: (bool) $paymentTerms);
 
         unset($payload['expirationDate']);
-        $payload['paymentConditions'] = [
-            'paymentTermLabel'    => 'Zahlbar innerhalb 30 Tagen netto',
-            'paymentTermDuration' => 30,
-        ];
+
+        if ($paymentTerms) {
+            $payload['paymentConditions'] = [
+                'paymentTermLabel'    => $paymentTerms['label'] ?? 'Zahlbar innerhalb 30 Tagen netto',
+                'paymentTermDuration' => $paymentTerms['duration'] ?? 30,
+            ];
+        }
 
         $serviceDate = $quote->event_date ?? now();
         $payload['shippingConditions'] = [
@@ -123,19 +126,22 @@ class LexwareService
     /**
      * Push quote as a finalized Lexware invoice (accepted state).
      */
-    public function pushInvoice(Quote $quote): string
+    public function pushInvoice(Quote $quote, ?array $paymentTerms = null): string
     {
         $quote->loadMissing(['customer', 'business', 'quoteLines']);
 
         $contactId = $quote->customer ? $this->pushContact($quote->customer) : null;
-        $payload   = $this->buildVoucherPayload($quote, $contactId);
+        $payload   = $this->buildVoucherPayload($quote, $contactId, includeAgreements: (bool) $paymentTerms);
 
         // Invoices use paymentConditions instead of expirationDate
         unset($payload['expirationDate']);
-        $payload['paymentConditions'] = [
-            'paymentTermLabel'    => 'Zahlbar innerhalb 30 Tagen netto',
-            'paymentTermDuration' => 30,
-        ];
+
+        if ($paymentTerms) {
+            $payload['paymentConditions'] = [
+                'paymentTermLabel'    => $paymentTerms['label'] ?? 'Zahlbar innerhalb 30 Tagen netto',
+                'paymentTermDuration' => $paymentTerms['duration'] ?? 30,
+            ];
+        }
 
         // Required by Lexware when finalizing — use event date if available, otherwise today
         $serviceDate = $quote->event_date ?? now();
@@ -152,7 +158,7 @@ class LexwareService
         return $id;
     }
 
-    private function buildVoucherPayload(Quote $quote, ?string $contactId): array
+    private function buildVoucherPayload(Quote $quote, ?string $contactId, bool $includeAgreements = true): array
     {
         $vatRate   = (float) ($quote->vat_rate ?? 19);
         $lineItems = [];
@@ -247,11 +253,47 @@ class LexwareService
             $payload['expirationDate'] = $quote->valid_until->format('Y-m-d\TH:i:s.000P');
         }
 
+        $remarkParts = [];
         if ($quote->notes) {
-            $payload['remark'] = $quote->notes;
+            $remarkParts[] = $quote->notes;
+        }
+        if ($includeAgreements) {
+            $remarkParts[] = $this->agreementsText();
+        }
+
+        if ($remarkParts) {
+            $payload['remark'] = implode("\n\n", $remarkParts);
         }
 
         return $payload;
+    }
+
+    private function agreementsText(): string
+    {
+        return <<<TEXT
+Allgemeine Geschäftsbedingungen
+
+Mit Annahme dieses Angebots ist eine Anzahlung von 50 % des Gesamtbruttobetrags zur Bestätigung Ihrer Buchung fällig.
+
+Buchungsbestätigung
+Dieses Angebot ist gültig bis zum oben angegebenen Datum. Die Annahme dieses Angebots stellt eine verbindliche Buchungsvereinbarung zwischen dem Auftraggeber und der SK Eventspace GmbH dar. Die Buchung gilt erst als bestätigt, wenn die Anzahlung eingegangen ist.
+
+Zahlungsbedingungen
+Bei Annahme dieses Angebots sind 50 % des Gesamtbruttobetrags als Anzahlung fällig. Die verbleibenden 50 % sind spätestens 14 Tage vor dem Veranstaltungsdatum zu entrichten. Zahlungen erfolgen per Überweisung auf das angegebene Bankkonto.
+
+Stornierungsbedingungen
+Stornierungen müssen schriftlich erfolgen. Es gelten folgende Stornogebühren:
+- Stornierung mehr als 30 Tage vor der Veranstaltung: Anzahlung wird abzüglich einer Bearbeitungsgebühr von 10 % erstattet.
+- Stornierung 14-30 Tage vor der Veranstaltung: 50 % des Gesamtbruttobetrags sind fällig.
+- Stornierung weniger als 14 Tage vor der Veranstaltung: 100 % des Gesamtbruttobetrags sind fällig.
+Die SK Eventspace GmbH behält sich das Recht vor, die Veranstaltung in Fällen höherer Gewalt ohne Haftung abzusagen.
+
+Höhere Gewalt
+Keine der Parteien haftet für die Nichterfüllung ihrer Verpflichtungen, sofern diese durch Umstände verursacht wird, die außerhalb ihrer zumutbaren Kontrolle liegen, einschließlich Naturkatastrophen, Pandemien, behördliche Einschränkungen oder Streiks. In solchen Fällen werden beide Parteien angemessene Bemühungen unternehmen, die Veranstaltung zu verschieben.
+
+Anwendbares Recht & Gerichtsstand
+Diese Vereinbarung unterliegt dem Recht der Bundesrepublik Deutschland. Gerichtsstand ist Berlin.
+TEXT;
     }
 
     private function lineItem(

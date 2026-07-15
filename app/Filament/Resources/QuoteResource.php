@@ -369,9 +369,10 @@ APPLESCRIPT;
                                     Forms\Components\Select::make('payment_status')
                                         ->label('Payment')
                                         ->options([
-                                            'unpaid'  => 'Unpaid',
-                                            'partial' => 'Partial',
-                                            'paid'    => 'Paid',
+                                            'unpaid'       => 'Unpaid',
+                                            'invoice_sent' => 'Invoice Sent',
+                                            'partial'      => 'Partial',
+                                            'paid'         => 'Paid',
                                         ])
                                         ->default('unpaid')
                                         ->required(),
@@ -627,6 +628,65 @@ APPLESCRIPT;
 
                                                 Notification::make()
                                                     ->title($customer->wasRecentlyCreated ? 'Customer created' : 'Customer updated')
+                                                    ->body($customer->display_name . ' saved to Contacts.')
+                                                    ->success()
+                                                    ->send();
+                                            }),
+
+                                        Forms\Components\Actions\Action::make('edit_customer')
+                                            ->label('Edit Customer')
+                                            ->icon('heroicon-o-pencil-square')
+                                            ->color('gray')
+                                            ->visible(fn (Forms\Get $get) => filled($get('customer_id')))
+                                            ->fillForm(function (Forms\Get $get) {
+                                                $customer = Customer::find($get('customer_id'));
+
+                                                return $customer ? [
+                                                    'first_name'   => $customer->first_name,
+                                                    'last_name'    => $customer->last_name,
+                                                    'company_name' => $customer->company_name,
+                                                    'email'        => $customer->email,
+                                                    'phone'        => $customer->phone,
+                                                    'address'      => $customer->address,
+                                                    'address_2'    => $customer->address_2,
+                                                    'postal_code'  => $customer->postal_code,
+                                                    'city'         => $customer->city,
+                                                    'country'      => $customer->country,
+                                                ] : [];
+                                            })
+                                            ->form([
+                                                Forms\Components\Grid::make(2)->schema([
+                                                    Forms\Components\TextInput::make('first_name')->label('First Name')->required(),
+                                                    Forms\Components\TextInput::make('last_name')->label('Last Name'),
+                                                    Forms\Components\TextInput::make('company_name')->label('Company')->columnSpanFull(),
+                                                    Forms\Components\TextInput::make('email')->label('Email')->email(),
+                                                    Forms\Components\TextInput::make('phone')->label('Phone')->tel(),
+                                                    Forms\Components\TextInput::make('address')->label('Address')->columnSpanFull(),
+                                                    Forms\Components\TextInput::make('address_2')->label('Address Line 2')->columnSpanFull(),
+                                                    Forms\Components\TextInput::make('postal_code')->label('Postal Code'),
+                                                    Forms\Components\TextInput::make('city')->label('City'),
+                                                    Forms\Components\TextInput::make('country')->label('Country')->default('DE'),
+                                                ]),
+                                            ])
+                                            ->modalHeading('Edit Customer')
+                                            ->modalWidth('lg')
+                                            ->action(function (array $data, Forms\Get $get, Forms\Set $set) {
+                                                $customer = Customer::find($get('customer_id'));
+
+                                                if (! $customer) {
+                                                    return;
+                                                }
+
+                                                $customer->update($data);
+
+                                                $set('customer_first_name', $customer->first_name);
+                                                $set('customer_last_name',  $customer->last_name);
+                                                $set('customer_company',    $customer->company_name);
+                                                $set('customer_email',      $customer->email);
+                                                $set('customer_phone',      $customer->phone);
+
+                                                Notification::make()
+                                                    ->title('Customer updated')
                                                     ->body($customer->display_name . ' saved to Contacts.')
                                                     ->success()
                                                     ->send();
@@ -1059,13 +1119,15 @@ APPLESCRIPT;
                     ->label('Payment')
                     ->colors([
                         'danger'  => 'unpaid',
+                        'info'    => 'invoice_sent',
                         'warning' => 'partial',
                         'success' => 'paid',
                     ])
                     ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'partial' => 'Partial',
-                        'paid'    => 'Paid',
-                        default   => 'Unpaid',
+                        'invoice_sent' => 'Invoice Sent',
+                        'partial'      => 'Partial',
+                        'paid'         => 'Paid',
+                        default        => 'Unpaid',
                     })
                     ->sortable(),
 
@@ -1153,9 +1215,10 @@ APPLESCRIPT;
                     ->label('Payment')
                     ->multiple()
                     ->options([
-                        'unpaid'  => 'Unpaid',
-                        'partial' => 'Partial',
-                        'paid'    => 'Paid',
+                        'unpaid'       => 'Unpaid',
+                        'invoice_sent' => 'Invoice Sent',
+                        'partial'      => 'Partial',
+                        'paid'         => 'Paid',
                     ]),
 
                 Tables\Filters\SelectFilter::make('business_id')
@@ -1364,9 +1427,29 @@ APPLESCRIPT;
             ->requiresConfirmation()
             ->modalHeading('Send as Lexware Draft Invoice')
             ->modalDescription('This will create a draft invoice in Lexware Office and link it to this quote.')
-            ->action(function (Quote $record) {
+            ->form([
+                Forms\Components\Toggle::make('include_payment_terms')
+                    ->label('Include payment terms (Zahlungsbedingung)')
+                    ->default(true)
+                    ->live(),
+                Forms\Components\TextInput::make('payment_term_label')
+                    ->label('Payment term text')
+                    ->default('Zahlbar innerhalb 30 Tagen netto')
+                    ->visible(fn (Forms\Get $get) => $get('include_payment_terms')),
+                Forms\Components\TextInput::make('payment_term_duration')
+                    ->label('Days')
+                    ->numeric()
+                    ->default(30)
+                    ->visible(fn (Forms\Get $get) => $get('include_payment_terms')),
+            ])
+            ->action(function (Quote $record, array $data) {
+                $paymentTerms = ($data['include_payment_terms'] ?? false) ? [
+                    'label'    => $data['payment_term_label'] ?? null,
+                    'duration' => $data['payment_term_duration'] ?? null,
+                ] : null;
+
                 try {
-                    $id = app(LexwareService::class)->pushDraftInvoice($record);
+                    $id = app(LexwareService::class)->pushDraftInvoice($record, $paymentTerms);
                     Notification::make()->title('Draft invoice created in Lexware')->body("ID: {$id}")->success()->send();
                 } catch (\Throwable $e) {
                     Notification::make()->title('Lexware sync failed')->body($e->getMessage())->danger()->send();
@@ -1388,9 +1471,29 @@ APPLESCRIPT;
             ->requiresConfirmation()
             ->modalHeading('Create Finalized Invoice in Lexware')
             ->modalDescription('This will create a finalized invoice in Lexware Office. This cannot be undone.')
-            ->action(function (Quote $record) {
+            ->form([
+                Forms\Components\Toggle::make('include_payment_terms')
+                    ->label('Include payment terms (Zahlungsbedingung)')
+                    ->default(true)
+                    ->live(),
+                Forms\Components\TextInput::make('payment_term_label')
+                    ->label('Payment term text')
+                    ->default('Zahlbar innerhalb 30 Tagen netto')
+                    ->visible(fn (Forms\Get $get) => $get('include_payment_terms')),
+                Forms\Components\TextInput::make('payment_term_duration')
+                    ->label('Days')
+                    ->numeric()
+                    ->default(30)
+                    ->visible(fn (Forms\Get $get) => $get('include_payment_terms')),
+            ])
+            ->action(function (Quote $record, array $data) {
+                $paymentTerms = ($data['include_payment_terms'] ?? false) ? [
+                    'label'    => $data['payment_term_label'] ?? null,
+                    'duration' => $data['payment_term_duration'] ?? null,
+                ] : null;
+
                 try {
-                    $id = app(LexwareService::class)->pushInvoice($record);
+                    $id = app(LexwareService::class)->pushInvoice($record, $paymentTerms);
                     Notification::make()->title('Invoice created in Lexware')->body("ID: {$id}")->success()->send();
                 } catch (\Throwable $e) {
                     Notification::make()->title('Lexware sync failed')->body($e->getMessage())->danger()->send();

@@ -210,9 +210,10 @@ class TrelloService
     private function paymentLabel(?string $status): string
     {
         return match ($status) {
-            'partial' => 'Partial',
-            'paid'    => 'Paid ✓',
-            default   => 'Unpaid',
+            'invoice_sent' => 'Invoice Sent',
+            'partial'      => 'Partial',
+            'paid'         => 'Paid ✓',
+            default        => 'Unpaid',
         };
     }
 }

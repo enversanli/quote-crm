@@ -36,9 +36,10 @@ class QuoteObserver
 
         if ($quote->wasChanged('payment_status')) {
             $comment = match ($quote->payment_status) {
-                'partial' => '💳 Partial payment received.',
-                'paid'    => '✅ Payment completed — fully paid.',
-                default   => 'ℹ️ Payment status reset to Unpaid.',
+                'invoice_sent' => '📨 Invoice sent to customer.',
+                'partial'      => '💳 Partial payment received.',
+                'paid'         => '✅ Payment completed — fully paid.',
+                default        => 'ℹ️ Payment status reset to Unpaid.',
             };
             $this->trello->addComment($cardId, $comment);
 
