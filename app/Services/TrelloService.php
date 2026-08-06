@@ -15,8 +15,8 @@ class TrelloService
 
     public function __construct()
     {
-        $this->key   = config('trello.key', '');
-        $this->token = config('trello.token', '');
+        $this->key   = config('trello.key') ?? '';
+        $this->token = config('trello.token') ?? '';
     }
 
     public function isConfigured(): bool
