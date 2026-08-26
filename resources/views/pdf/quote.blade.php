@@ -120,6 +120,7 @@
             margin: 18px 0 10px;
             padding-bottom: 6px;
             border-bottom: 1px solid #ddd;
+            page-break-after: avoid;
         }
 
         /* ── Venue block ── */
@@ -152,6 +153,7 @@
             font-weight: bold;
             letter-spacing: 1px;
             text-transform: uppercase;
+            page-break-after: avoid;
         }
         .items-table { width: 100%; border-collapse: collapse; }
         .items-table thead tr { background: #f5f5f5; }
@@ -192,6 +194,7 @@
             margin: 22px 0 4px;
             padding-bottom: 6px;
             border-bottom: 1px dashed #bbb;
+            page-break-after: avoid;
         }
         .info-notice {
             text-align: center;
@@ -210,6 +213,7 @@
             letter-spacing: 1px;
             text-transform: uppercase;
             border-left: 3px solid #aaa;
+            page-break-after: avoid;
         }
         .items-table .info-row td { color: #666; font-style: italic; background: #fafafa; }
         .subtotal-row-info td {
@@ -917,15 +921,15 @@ $country   = $quote->customer?->country;
                 <table class="items-table">
                     <thead>
                         <tr>
-                            <th style="width:38%">{{ $t['col_description'] }}</th>
-                            <th style="width:7%">{{ $t['col_qty'] }}</th>
-                            <th style="width:8%">{{ $t['col_unit'] }}</th>
+                            <th style="width:{{ $showPrices ? '26%' : '45%' }}">{{ $t['col_description'] }}</th>
+                            <th style="width:6%">{{ $t['col_qty'] }}</th>
+                            <th style="width:7%">{{ $t['col_unit'] }}</th>
                             @if($showPrices)
                                 <th class="text-right" style="width:13%">{{ $t['col_unit_price'] }}</th>
                                 <th class="text-right" style="width:10%">{{ $t['col_discount'] }}</th>
                                 <th class="text-right" style="width:12%">{{ $t['col_net_total'] }}</th>
                             @endif
-                            <th>{{ $t['col_note'] }}</th>
+                            <th style="width:{{ $showPrices ? '26%' : '36%' }}">{{ $t['col_note'] }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1006,9 +1010,9 @@ $country   = $quote->customer?->country;
                     <thead>
                         <tr>
                             <th style="width:38%">{{ $t['col_description'] }}</th>
-                            <th style="width:7%">{{ $t['col_qty'] }}</th>
-                            <th style="width:8%">{{ $t['col_unit'] }}</th>
-                            <th>{{ $t['col_note'] }}</th>
+                            <th style="width:6%">{{ $t['col_qty'] }}</th>
+                            <th style="width:7%">{{ $t['col_unit'] }}</th>
+                            <th style="width:49%">{{ $t['col_note'] }}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1083,13 +1087,13 @@ $country   = $quote->customer?->country;
                     <table class="items-table">
                         <thead>
                             <tr>
-                                <th style="width:38%">{{ $t['col_description'] }}</th>
-                                <th style="width:7%">{{ $t['col_qty'] }}</th>
-                                <th style="width:8%">{{ $t['col_unit'] }}</th>
+                                <th style="width:26%">{{ $t['col_description'] }}</th>
+                                <th style="width:6%">{{ $t['col_qty'] }}</th>
+                                <th style="width:7%">{{ $t['col_unit'] }}</th>
                                 <th class="text-right" style="width:13%">{{ $t['col_unit_price'] }}</th>
                                 <th class="text-right" style="width:10%">{{ $t['col_discount'] }}</th>
                                 <th class="text-right" style="width:12%">{{ $t['col_net_total'] }}</th>
-                                <th>{{ $t['col_note'] }}</th>
+                                <th style="width:26%">{{ $t['col_note'] }}</th>
                             </tr>
                         </thead>
                         <tbody>
