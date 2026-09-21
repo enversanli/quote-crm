@@ -1083,11 +1083,6 @@ APPLESCRIPT;
                     ->searchable(['customer_first_name', 'customer_last_name', 'customer_company'])
                     ->placeholder('—'),
 
-                Tables\Columns\TextColumn::make('business.name')
-                    ->label('Business')
-                    ->searchable()
-                    ->placeholder('—'),
-
                 Tables\Columns\TextColumn::make('event_date')
                     ->label('Event Date')
                     ->date('d.m.Y')
@@ -1131,37 +1126,6 @@ APPLESCRIPT;
                     })
                     ->sortable(),
 
-                Tables\Columns\BadgeColumn::make('organizer_type')
-                    ->label('Organizer')
-                    ->colors([
-                        'info'    => 'business',
-                        'warning' => 'private',
-                    ])
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'private'  => 'Private',
-                        'business' => 'Business',
-                        default    => '—',
-                    })
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: false),
-
-                Tables\Columns\BadgeColumn::make('event_type')
-                    ->label('Event Type')
-                    ->formatStateUsing(fn (?string $state): string => match ($state) {
-                        'meeting'    => 'Meeting',
-                        'conference' => 'Conference',
-                        'workshop'   => 'Workshop',
-                        'seminar'    => 'Seminar',
-                        'training'   => 'Training',
-                        'birthday'   => 'Birthday',
-                        'wedding'    => 'Wedding',
-                        'gala'       => 'Gala / Dinner',
-                        'team_event' => 'Team Event',
-                        'other'      => 'Other',
-                        default      => '—',
-                    })
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('venue_subtotal')
                     ->label('Venue (net)')
@@ -1221,53 +1185,71 @@ APPLESCRIPT;
                         'paid'         => 'Paid',
                     ]),
 
-                Tables\Filters\SelectFilter::make('business_id')
-                    ->label('Business / Venue')
-                    ->relationship('business', 'name')
-                    ->searchable()
-                    ->preload(),
-
-                Tables\Filters\SelectFilter::make('organizer_type')
-                    ->label('Organizer')
-                    ->options([
-                        'private'  => 'Private',
-                        'business' => 'Business',
-                    ]),
-
-                Tables\Filters\SelectFilter::make('event_type')
-                    ->label('Event Type')
-                    ->multiple()
-                    ->options([
-                        'meeting'    => 'Meeting',
-                        'conference' => 'Conference',
-                        'workshop'   => 'Workshop',
-                        'seminar'    => 'Seminar',
-                        'training'   => 'Training',
-                        'birthday'   => 'Birthday',
-                        'wedding'    => 'Wedding',
-                        'gala'       => 'Gala / Dinner',
-                        'team_event' => 'Team Event',
-                        'other'      => 'Other',
-                    ]),
-
                 Tables\Filters\Filter::make('event_date')
                     ->label('Event Date')
+                    ->columns(2)
                     ->form([
                         Forms\Components\DatePicker::make('from')->label('From'),
                         Forms\Components\DatePicker::make('until')->label('Until'),
                     ])
                     ->query(fn ($query, array $data) => $query
-                        ->when($data['from'],  fn ($q, $v) => $q->whereDate('event_date', '>=', $v))
-                        ->when($data['until'], fn ($q, $v) => $q->whereDate('event_date', '<=', $v))
+                        ->when($data['from']  ?? null, fn ($q, $v) => $q->whereDate('event_date', '>=', $v))
+                        ->when($data['until'] ?? null, fn ($q, $v) => $q->whereDate('event_date', '<=', $v))
                     )
                     ->indicateUsing(function (array $data): array {
                         $indicators = [];
-                        if ($data['from'])  $indicators[] = Tables\Filters\Indicator::make('Event from ' . Carbon::parse($data['from'])->format('d.m.Y'))->removeField('from');
-                        if ($data['until']) $indicators[] = Tables\Filters\Indicator::make('Event until ' . Carbon::parse($data['until'])->format('d.m.Y'))->removeField('until');
+                        if ($data['from']  ?? null) $indicators[] = Tables\Filters\Indicator::make('Event from ' . Carbon::parse($data['from'])->format('d.m.Y'))->removeField('from');
+                        if ($data['until'] ?? null) $indicators[] = Tables\Filters\Indicator::make('Event until ' . Carbon::parse($data['until'])->format('d.m.Y'))->removeField('until');
+                        return $indicators;
+                    }),
+
+                Tables\Filters\Filter::make('event_month')
+                    ->label('Event Month / Year')
+                    ->columns(2)
+                    ->form([
+                        Forms\Components\Select::make('month')
+                            ->label('Month')
+                            ->options([
+                                1  => 'January',
+                                2  => 'February',
+                                3  => 'March',
+                                4  => 'April',
+                                5  => 'May',
+                                6  => 'June',
+                                7  => 'July',
+                                8  => 'August',
+                                9  => 'September',
+                                10 => 'October',
+                                11 => 'November',
+                                12 => 'December',
+                            ]),
+                        Forms\Components\Select::make('year')
+                            ->label('Year')
+                            ->options(fn () => Quote::whereNotNull('event_date')
+                                ->selectRaw("CAST(strftime('%Y', event_date) AS INTEGER) as year")
+                                ->distinct()
+                                ->orderByDesc('year')
+                                ->pluck('year', 'year')
+                                ->toArray()),
+                    ])
+                    ->query(fn ($query, array $data) => $query
+                        ->when($data['month'] ?? null, fn ($q, $v) => $q->whereMonth('event_date', $v))
+                        ->when($data['year']  ?? null, fn ($q, $v) => $q->whereYear('event_date', $v))
+                    )
+                    ->indicateUsing(function (array $data): array {
+                        $monthNames = [
+                            1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+                            5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+                            9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December',
+                        ];
+                        $indicators = [];
+                        if (! empty($data['month'])) $indicators[] = Tables\Filters\Indicator::make('Month: ' . $monthNames[(int) $data['month']])->removeField('month');
+                        if (! empty($data['year']))  $indicators[] = Tables\Filters\Indicator::make('Year: ' . $data['year'])->removeField('year');
                         return $indicators;
                     }),
             ])
-            ->filtersFormColumns(3)
+            ->filtersFormColumns(2)
+            ->filtersFormWidth(\Filament\Support\Enums\MaxWidth::Large)
             ->actions([
                 Tables\Actions\EditAction::make(),
 

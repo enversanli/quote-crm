@@ -67,18 +67,27 @@ class Statistics extends Page
         $pipelineValue  = $pipelineQuotes->sum(fn ($q) => (float) $q->total_gross);
         $pipelineCount  = $pipelineQuotes->count();
 
-        // ── Monthly revenue (12 months) ──
-        $monthlyRevenue = [];
-        $monthlyEvents  = [];
-        $monthLabels    = [];
+        // ── Monthly quote value (12 months): total / accepted / paid ──
+        $monthlyTotal    = [];
+        $monthlyAccepted = [];
+        $monthlyPaid     = [];
+        $monthLabels     = [];
         for ($m = 1; $m <= 12; $m++) {
             $monthLabels[] = Carbon::create($y, $m, 1)->format('M');
-            $mq = Quote::whereIn('status', ['accepted', 'completed'])
-                ->whereYear('event_date', $y)
+
+            $monthQuotes = Quote::whereYear('event_date', $y)
                 ->whereMonth('event_date', $m)
                 ->get();
-            $monthlyRevenue[] = round($mq->sum(fn ($q) => (float) $q->total_gross), 2);
-            $monthlyEvents[]  = $mq->count();
+
+            $monthlyTotal[]    = round($monthQuotes->sum(fn ($q) => (float) $q->total_gross), 2);
+            $monthlyAccepted[] = round(
+                $monthQuotes->whereIn('status', ['accepted', 'completed'])->sum(fn ($q) => (float) $q->total_gross),
+                2
+            );
+            $monthlyPaid[] = round(
+                $monthQuotes->where('payment_status', 'paid')->sum(fn ($q) => (float) $q->total_gross),
+                2
+            );
         }
 
         // ── Quote status breakdown (all quotes this year) ──
@@ -138,7 +147,7 @@ class Statistics extends Page
             'totalRevenue', 'totalEvents', 'avgRevenue',
             'conversionRate', 'pipelineValue', 'pipelineCount',
             'totalQuotes', 'acceptedCount',
-            'monthlyRevenue', 'monthlyEvents', 'monthLabels',
+            'monthlyTotal', 'monthlyAccepted', 'monthlyPaid', 'monthLabels',
             'statusCounts', 'statusOrder', 'statusColors',
             'eventTypes',
             'organizerTypes', 'totalOrganizers',

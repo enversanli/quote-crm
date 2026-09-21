@@ -252,8 +252,9 @@
              chart: null,
              init() {
                  const labels  = {{ Js::from($monthLabels) }};
-                 const revenue = {{ Js::from($monthlyRevenue) }};
-                 const events  = {{ Js::from($monthlyEvents) }};
+                 const total   = {{ Js::from($monthlyTotal) }};
+                 const accepted = {{ Js::from($monthlyAccepted) }};
+                 const paid    = {{ Js::from($monthlyPaid) }};
                  const isDark  = document.documentElement.classList.contains('dark');
                  const gridC   = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
                  const textC   = isDark ? '#9ca3af' : '#6b7280';
@@ -265,25 +266,28 @@
                          labels,
                          datasets: [
                              {
-                                 label: 'Revenue (€)',
-                                 data: revenue,
-                                 backgroundColor: 'rgba(245,158,11,0.18)',
-                                 borderColor: 'rgba(245,158,11,0.85)',
-                                 borderWidth: 2,
-                                 borderRadius: 5,
-                                 yAxisID: 'y',
+                                 label: 'Total quoted (€)',
+                                 data: total,
+                                 backgroundColor: 'rgba(245,158,11,0.75)',
+                                 borderColor: 'rgb(245,158,11)',
+                                 borderWidth: 1,
+                                 borderRadius: 4,
                              },
                              {
-                                 label: 'Events',
-                                 data: events,
-                                 type: 'line',
-                                 borderColor: 'rgba(59,130,246,0.75)',
-                                 backgroundColor: 'transparent',
-                                 pointBackgroundColor: 'rgba(59,130,246,0.9)',
-                                 borderWidth: 2,
-                                 pointRadius: 4,
-                                 tension: 0.35,
-                                 yAxisID: 'y2',
+                                 label: 'Accepted (€)',
+                                 data: accepted,
+                                 backgroundColor: 'rgba(16,185,129,0.75)',
+                                 borderColor: 'rgb(16,185,129)',
+                                 borderWidth: 1,
+                                 borderRadius: 4,
+                             },
+                             {
+                                 label: 'Paid (€)',
+                                 data: paid,
+                                 backgroundColor: 'rgba(99,102,241,0.75)',
+                                 borderColor: 'rgb(99,102,241)',
+                                 borderWidth: 1,
+                                 borderRadius: 4,
                              },
                          ],
                      },
@@ -295,23 +299,21 @@
                              legend: { position: 'top', labels: { color: textC, boxWidth: 12, font: { size: 12 } } },
                              tooltip: {
                                  callbacks: {
-                                     label: (ctx) => ctx.datasetIndex === 0
-                                         ? ' € ' + Number(ctx.parsed.y).toLocaleString('de-DE', { minimumFractionDigits: 2 })
-                                         : ' ' + ctx.parsed.y + ' event(s)',
+                                     label: (ctx) => ' ' + ctx.dataset.label + ': € '
+                                         + Number(ctx.parsed.y).toLocaleString('de-DE', { minimumFractionDigits: 2 }),
                                  },
                              },
                          },
                          scales: {
-                             y:  { beginAtZero: true, position: 'left',  grid: { color: gridC }, ticks: { color: textC, callback: (v) => '€ ' + v.toLocaleString('de-DE') } },
-                             y2: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { color: textC, stepSize: 1, precision: 0 } },
-                             x:  { grid: { display: false }, ticks: { color: textC } },
+                             y: { beginAtZero: true, grid: { color: gridC }, ticks: { color: textC, callback: (v) => '€ ' + v.toLocaleString('de-DE') } },
+                             x: { grid: { display: false }, ticks: { color: textC } },
                          },
                      },
                  });
              },
          }"
     >
-        <div class="st-panel-title">Monthly Revenue &amp; Events — {{ $year }}</div>
+        <div class="st-panel-title">Monthly Revenue — Total / Accepted / Paid — {{ $year }}</div>
         <div style="position:relative; height:260px;">
             <canvas x-ref="canvas"></canvas>
         </div>
