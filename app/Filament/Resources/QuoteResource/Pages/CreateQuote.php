@@ -34,4 +34,9 @@ class CreateQuote extends CreateRecord
 
         $this->callHook('afterFill');
     }
+
+    protected function afterCreate(): void
+    {
+        QuoteResource::notifySameDayBookings($this->record);
+    }
 }

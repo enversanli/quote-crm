@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
 
 class Quote extends Model
 {
@@ -31,9 +32,7 @@ class Quote extends Model
     {
         static::creating(function (Quote $quote) {
             if (empty($quote->quote_number)) {
-                $year  = now()->year;
-                $count = static::whereYear('created_at', $year)->count() + 1;
-                $quote->quote_number = 'QT-' . $year . '-' . str_pad($count, 5, '0', STR_PAD_LEFT);
+                $quote->quote_number = static::generateQuoteNumber();
             }
         });
 
@@ -43,6 +42,71 @@ class Quote extends Model
             $venueDiscount       = self::calcDiscount($venueGross, $quote->venue_discount_type, (float) ($quote->venue_discount_value ?? 0));
             $quote->venue_subtotal = round($venueGross - $venueDiscount, 2);
         });
+    }
+
+    /**
+     * Next QT-YYYY-##### number for the current year, based on the highest
+     * suffix actually in use (not a row count, which drifts once quotes are
+     * deleted and collides with numbers still assigned to surviving quotes).
+     */
+    public static function generateQuoteNumber(): string
+    {
+        $year = now()->year;
+
+        $maxSuffix = static::where('quote_number', 'like', "QT-{$year}-%")
+            ->pluck('quote_number')
+            ->map(fn (string $number) => (int) substr($number, -5))
+            ->max() ?? 0;
+
+        do {
+            $maxSuffix++;
+            $candidate = 'QT-' . $year . '-' . str_pad($maxSuffix, 5, '0', STR_PAD_LEFT);
+        } while (static::where('quote_number', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    // ──────────────────────────────────────────────
+    // Same-day bookings
+    // ──────────────────────────────────────────────
+
+    /** Statuses that occupy the venue (or are offered to a customer) for their event date. */
+    public const BOOKING_STATUSES = ['sent', 'accepted', 'completed'];
+
+    /**
+     * Other booking-status quotes on the given date at the given venue
+     * (any venue when $businessId is null), ordered by start time.
+     */
+    public static function sameDayBookings($date, $businessId = null, $exceptId = null): Collection
+    {
+        if (blank($date)) {
+            return collect();
+        }
+
+        return static::query()
+            ->whereIn('status', self::BOOKING_STATUSES)
+            ->whereDate('event_date', $date)
+            ->when($businessId, fn ($q) => $q->where('business_id', $businessId))
+            ->when($exceptId, fn ($q) => $q->whereKeyNot($exceptId))
+            ->orderBy('event_start_time')
+            ->get();
+    }
+
+    /**
+     * Upcoming days where a venue has more than one booking-status quote,
+     * keyed by "Y-m-d|business_id" and sorted by date.
+     */
+    public static function upcomingClashes(): Collection
+    {
+        return static::query()
+            ->with(['business', 'customer'])
+            ->whereIn('status', self::BOOKING_STATUSES)
+            ->whereDate('event_date', '>=', today())
+            ->orderBy('event_date')
+            ->orderBy('event_start_time')
+            ->get()
+            ->groupBy(fn (Quote $q) => $q->event_date->toDateString() . '|' . $q->business_id)
+            ->filter(fn (Collection $group) => $group->count() > 1);
     }
 
     // ──────────────────────────────────────────────

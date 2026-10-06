@@ -308,8 +308,41 @@
             color: #374151;
         }
     </style>
+    @if($preview ?? false)
+    <style>
+        body { background: #cbd5e1 !important; }
+        .preview-page-wrap {
+            max-width: 794px;
+            margin: 24px auto 48px;
+            background: #fff;
+            box-shadow: 0 4px 32px rgba(0,0,0,0.18);
+        }
+    </style>
+    @endif
 </head>
 <body>
+
+@if($preview ?? false)
+<div style="
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: #1d4ed8; color: #fff;
+    padding: 10px 20px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-family: system-ui, sans-serif; font-size: 13px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+">
+    <span>
+        <strong>Vorschau</strong>
+        &nbsp;—&nbsp; HTML-Vorschau der Bestellung. Das PDF kann über die Aktion „PDF“ heruntergeladen werden.
+    </span>
+    <span style="display:flex; gap:12px; align-items:center;">
+        <a href="?show_prices=1" style="color:#bfdbfe; text-decoration:none; font-size:12px;">Preise anzeigen</a>
+        <a href="?show_prices=0" style="color:#bfdbfe; text-decoration:none; font-size:12px;">Preise ausblenden</a>
+    </span>
+</div>
+<div style="height: 44px;"></div>
+<div class="preview-page-wrap">
+@endif
 
     {{-- ── Top bar ── --}}
     <div class="top-bar">
@@ -517,5 +550,6 @@
         </table>
 
     </div>
+@if($preview ?? false)</div>@endif
 </body>
 </html>

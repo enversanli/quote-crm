@@ -30,4 +30,10 @@ class EditQuote extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function afterSave(): void
+    {
+        QuoteResource::notifySameDayBookings($this->record);
+        $this->dispatch('quotes-changed');
+    }
 }

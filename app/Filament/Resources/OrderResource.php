@@ -188,6 +188,7 @@ class OrderResource extends Resource
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->defaultSort('created_at', 'desc')
             ->filters([
                 Tables\Filters\SelectFilter::make('status')
                     ->label('Status')
@@ -199,6 +200,12 @@ class OrderResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('preview_pdf')
+                    ->label('Vorschau')
+                    ->icon('heroicon-o-eye')
+                    ->color('gray')
+                    ->url(fn (Order $record) => route('orders.preview', $record))
+                    ->openUrlInNewTab(),
                 Tables\Actions\Action::make('download_pdf')
                     ->label('PDF')
                     ->icon('heroicon-o-arrow-down-tray')
@@ -211,30 +218,12 @@ class OrderResource extends Resource
                     ->modalHeading('Bestellung als PDF herunterladen')
                     ->modalSubmitActionLabel('Herunterladen')
                     ->action(function (Order $record, array $data) {
-                        $order = $record->load([
-                            'orderLines.orderItem.itemGroup',
-                        ]);
-
-                        $grouped = $order->orderLines
-                            ->filter(fn ($line) => (bool) $line->include_in_total)
-                            ->groupBy(fn ($line) => $line->orderItem->itemGroup->name)
-                            ->sortKeys();
-
-                        $infoGrouped = $order->orderLines
-                            ->filter(fn ($line) => ! (bool) $line->include_in_total)
-                            ->groupBy(fn ($line) => $line->orderItem->itemGroup->name)
-                            ->sortKeys();
-
-                        $pdf = Pdf::loadView('pdf.order', [
-                            'order'       => $order,
-                            'grouped'     => $grouped,
-                            'infoGrouped' => $infoGrouped,
-                            'showPrices'  => $data['show_prices'],
-                        ])->setPaper('a4');
+                        $pdf = Pdf::loadView('pdf.order', self::pdfViewData($record, $data['show_prices']))
+                            ->setPaper('a4');
 
                         return response()->streamDownload(
                             fn () => print($pdf->output()),
-                            "bestellung-{$order->id}-{$order->name}.pdf"
+                            "bestellung-{$record->id}-{$record->name}.pdf"
                         );
                     }),
             ])
@@ -243,6 +232,31 @@ class OrderResource extends Resource
                     Tables\Actions\DeleteBulkAction::make(),
                 ]),
             ]);
+    }
+
+    /**
+     * View data for resources/views/pdf/order.blade.php — shared by the PDF download and the HTML preview route.
+     */
+    public static function pdfViewData(Order $order, bool $showPrices): array
+    {
+        $order->load(['orderLines.orderItem.itemGroup']);
+
+        $grouped = $order->orderLines
+            ->filter(fn ($line) => (bool) $line->include_in_total)
+            ->groupBy(fn ($line) => $line->orderItem->itemGroup->name)
+            ->sortKeys();
+
+        $infoGrouped = $order->orderLines
+            ->filter(fn ($line) => ! (bool) $line->include_in_total)
+            ->groupBy(fn ($line) => $line->orderItem->itemGroup->name)
+            ->sortKeys();
+
+        return [
+            'order'       => $order,
+            'grouped'     => $grouped,
+            'infoGrouped' => $infoGrouped,
+            'showPrices'  => $showPrices,
+        ];
     }
 
     public static function getPages(): array

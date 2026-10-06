@@ -146,6 +146,116 @@ class QuoteResource extends Resource
         self::refreshVenueNet($set, $get);
     }
 
+    /** Badge colour per quote status — same mapping as the table's status column. */
+    public static function statusColor(?string $status): string
+    {
+        return match ($status) {
+            'sent'      => 'info',
+            'accepted'  => 'success',
+            'completed' => 'primary',
+            'rejected'  => 'danger',
+            'expired'   => 'warning',
+            default     => 'gray',
+        };
+    }
+
+    /** "15:00–20:00", or null when the quote has no times. */
+    public static function timeRange(?string $start, ?string $end): ?string
+    {
+        if (! $start && ! $end) {
+            return null;
+        }
+
+        return substr($start ?? '?', 0, 5) . '–' . substr($end ?? '?', 0, 5);
+    }
+
+    /** True when both sides have times and $q's slot overlaps $start–$end. */
+    public static function timesOverlap(Quote $q, ?string $start, ?string $end): bool
+    {
+        return $start && $end && $q->event_start_time && $q->event_end_time
+            && substr($q->event_start_time, 0, 5) < substr($end, 0, 5)
+            && substr($start, 0, 5) < substr($q->event_end_time, 0, 5);
+    }
+
+    /**
+     * Warning chip for the sticky summary bar; clicking it opens the Event & Venue tab
+     * and scrolls to the same-day hint. Empty string when the day is free.
+     */
+    private static function sameDayBookingsChip(Forms\Get $get, ?Quote $record): string
+    {
+        $others = Quote::sameDayBookings($get('event_date'), $get('business_id'), $record?->id);
+
+        if ($others->isEmpty()) {
+            return '';
+        }
+
+        $overlap = $others->contains(fn (Quote $q) => self::timesOverlap($q, $get('event_start_time'), $get('event_end_time')));
+        [$bg, $border, $fg] = $overlap ? ['#fef2f2', '#fca5a5', '#b91c1c'] : ['#fffbeb', '#fcd34d', '#92400e'];
+
+        $title = $others->count() === 1
+            ? '1 other event on ' . Carbon::parse($get('event_date'))->format('d.m.Y')
+            : $others->count() . ' other events on ' . Carbon::parse($get('event_date'))->format('d.m.Y');
+
+        $detail = $others->map(fn (Quote $q) => e($q->quote_number)
+            . ' · ' . e(self::timeRange($q->event_start_time, $q->event_end_time) ?? 'no time')
+            . ' · ' . e(ucfirst($q->status))
+        )->implode(' &nbsp;|&nbsp; ');
+
+        $openTab = "document.querySelectorAll('.fi-tabs-item').forEach(b => { if (b.textContent.includes('Event & Venue')) b.click(); });"
+            . " setTimeout(() => document.getElementById('same-day-bookings-hint')?.scrollIntoView({behavior: 'smooth', block: 'center'}), 150);";
+
+        return '<button type="button" x-on:click="' . e($openTab) . '" title="Show in Event &amp; Venue"'
+            . ' style="margin-right:auto;display:flex;align-items:center;gap:10px;text-align:left;cursor:pointer;background:' . $bg . ';border:1px solid ' . $border . ';color:' . $fg . ';padding:6px 14px;border-radius:6px;max-width:55%;">'
+            . '<span style="font-size:18px;line-height:1;">⚠️</span>'
+            . '<span style="display:flex;flex-direction:column;min-width:0;">'
+            . '<strong style="font-size:12px;">' . $title . ($overlap ? ' — times overlap' : '') . '</strong>'
+            . '<span style="font-size:11px;opacity:0.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' . $detail . '</span>'
+            . '</span>'
+            . '<span style="font-size:11px;font-weight:600;white-space:nowrap;text-decoration:underline;">View →</span>'
+            . '</button>';
+    }
+
+    /**
+     * HTML list of same-day quotes; quotes whose times overlap $start–$end are marked.
+     */
+    public static function sameDayBookingsHtml(\Illuminate\Support\Collection $quotes, ?string $start = null, ?string $end = null): HtmlString
+    {
+        $items = $quotes->map(function (Quote $q) use ($start, $end) {
+            $overlaps = self::timesOverlap($q, $start, $end);
+
+            return '<li>'
+                . '<a href="' . e(self::getUrl('edit', ['record' => $q])) . '" style="font-weight:600; text-decoration:underline;">' . e($q->quote_number) . '</a>'
+                . ' · ' . e(self::timeRange($q->event_start_time, $q->event_end_time) ?? 'no time set')
+                . ' · ' . e($q->customer_display_name)
+                . ' · <strong>' . e(ucfirst($q->status)) . '</strong>'
+                . ($overlaps ? ' · <strong style="color:#dc2626;">times overlap</strong>' : '')
+                . '</li>';
+        })->implode('');
+
+        return new HtmlString('<ul style="list-style:disc; padding-left:1.25rem; line-height:1.7;">' . $items . '</ul>');
+    }
+
+    /** After create/save: warn when a booking-status quote shares its day with other bookings. */
+    public static function notifySameDayBookings(Quote $quote): void
+    {
+        if (! in_array($quote->status, Quote::BOOKING_STATUSES, true)) {
+            return;
+        }
+
+        $others = Quote::sameDayBookings($quote->event_date, $quote->business_id, $quote->id);
+
+        if ($others->isEmpty()) {
+            return;
+        }
+
+        Notification::make()
+            ->warning()
+            ->title('Another event on ' . $quote->event_date->format('d.m.Y'))
+            ->body(self::sameDayBookingsHtml($others, $quote->event_start_time, $quote->event_end_time))
+            ->persistent()
+            ->send();
+    }
+
     /** Re-compute line_total_display inside a repeater item. */
     private static function refreshLineTotal(Forms\Set $set, Forms\Get $get): void
     {
@@ -409,7 +519,19 @@ APPLESCRIPT;
                                 ->schema([
                                     Forms\Components\DatePicker::make('event_date')
                                         ->label('Event Date')
-                                        ->nullable(),
+                                        ->nullable()
+                                        ->live(),
+
+                                    Forms\Components\Placeholder::make('same_day_bookings')
+                                        ->label(fn (Forms\Get $get) => '⚠️ Other events on ' . Carbon::parse($get('event_date'))->format('d.m.Y'))
+                                        ->content(fn (Forms\Get $get, ?Quote $record) => self::sameDayBookingsHtml(
+                                            Quote::sameDayBookings($get('event_date'), $get('business_id'), $record?->id),
+                                            $get('event_start_time'),
+                                            $get('event_end_time'),
+                                        ))
+                                        ->visible(fn (Forms\Get $get, ?Quote $record) => Quote::sameDayBookings($get('event_date'), $get('business_id'), $record?->id)->isNotEmpty())
+                                        ->extraAttributes(['id' => 'same-day-bookings-hint', 'style' => 'scroll-margin-bottom:96px; background:#fef3c7; border:1px solid #f59e0b; border-radius:0.5rem; padding:0.75rem 1rem; color:#78350f;'])
+                                        ->columnSpanFull(),
 
                                     Forms\Components\Select::make('business_id')
                                         ->label('Business / Venue')
@@ -991,7 +1113,8 @@ APPLESCRIPT;
             Forms\Components\Placeholder::make('sticky_summary')
                 ->label('')
                 ->columnSpanFull()
-                ->content(function (Forms\Get $get): HtmlString {
+                ->content(function (Forms\Get $get, ?Quote $record): HtmlString {
+                    $sameDayChip = self::sameDayBookingsChip($get, $record);
                     $p         = self::computePricing($get);
                     $fmt       = fn (float $v) => number_format($v, 2, ',', '.');
                     $attendees = (int) ($get('attendee_count') ?? 0);
@@ -1027,7 +1150,7 @@ APPLESCRIPT;
                     return new HtmlString(
                         '<div x-data x-init="document.body.style.paddingBottom=\'72px\'" style="height:0;overflow:visible;">'
                         . '<div style="position:fixed;bottom:0;left:0;right:0;z-index:9999;background:rgba(255,255,255,0.97);backdrop-filter:blur(6px);border-top:2px solid #e5e7eb;box-shadow:0 -4px 20px rgba(0,0,0,0.07);padding:12px 32px;display:flex;gap:24px;align-items:center;">'
-                        . '<span style="font-size:11px;color:#d1d5db;margin-right:auto;letter-spacing:0.04em;">LIVE SUMMARY</span>'
+                        . ($sameDayChip ?: '<span style="font-size:11px;color:#d1d5db;margin-right:auto;letter-spacing:0.04em;">LIVE SUMMARY</span>')
 
                         // Netto
                         . '<div style="display:flex;flex-direction:column;align-items:flex-end;">'

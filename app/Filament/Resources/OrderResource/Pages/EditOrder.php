@@ -13,6 +13,12 @@ class EditOrder extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
+            Actions\Action::make('preview_pdf')
+                ->label('Vorschau')
+                ->icon('heroicon-o-eye')
+                ->color('gray')
+                ->url(fn () => route('orders.preview', $this->record))
+                ->openUrlInNewTab(),
             Actions\DeleteAction::make(),
         ];
     }
