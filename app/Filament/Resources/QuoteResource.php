@@ -3,6 +3,7 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\QuoteResource\Pages;
+use App\Filament\Resources\QuoteResource\RelationManagers;
 use App\Models\Business;
 use App\Models\Customer;
 use App\Models\OrderItem;
@@ -474,7 +475,19 @@ APPLESCRIPT;
                                             'expired'   => 'Expired',
                                         ])
                                         ->default('draft')
-                                        ->required(),
+                                        ->required()
+                                        ->live(),
+
+                                    // Saved into quote_status_changes by EditQuote/CreateQuote, not a quotes column.
+                                    Forms\Components\Textarea::make('status_comment')
+                                        ->label(fn (Forms\Get $get, ?Quote $record) => $record
+                                            ? 'Comment for status change: ' . ucfirst($record->status) . ' → ' . ucfirst((string) $get('status'))
+                                            : 'Comment for initial status')
+                                        ->placeholder('Optional — e.g. "Customer confirmed by phone"')
+                                        ->rows(2)
+                                        ->dehydrated(false)
+                                        ->visible(fn (Forms\Get $get, ?Quote $record) => ! $record || $get('status') !== $record->status)
+                                        ->columnSpanFull(),
 
                                     Forms\Components\Select::make('payment_status')
                                         ->label('Payment')
@@ -1604,6 +1617,13 @@ APPLESCRIPT;
                     Notification::make()->title('Lexware sync failed')->body($e->getMessage())->danger()->send();
                 }
             });
+    }
+
+    public static function getRelations(): array
+    {
+        return [
+            RelationManagers\StatusChangesRelationManager::class,
+        ];
     }
 
     public static function getPages(): array

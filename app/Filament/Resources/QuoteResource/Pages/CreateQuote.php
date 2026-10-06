@@ -37,6 +37,11 @@ class CreateQuote extends CreateRecord
 
     protected function afterCreate(): void
     {
+        // The observer logged the initial status on create; attach the optional comment to it.
+        if (filled($comment = $this->data['status_comment'] ?? null)) {
+            $this->record->statusChanges()->latest('id')->first()?->update(['comment' => $comment]);
+        }
+
         QuoteResource::notifySameDayBookings($this->record);
     }
 }

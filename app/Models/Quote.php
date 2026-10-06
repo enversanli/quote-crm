@@ -11,6 +11,12 @@ class Quote extends Model
 {
     protected $guarded = [];
 
+    /**
+     * Optional comment for the next status change; QuoteObserver writes it into
+     * quote_status_changes and clears it. A declared property, not a column.
+     */
+    public ?string $statusChangeComment = null;
+
     protected $casts = [
         'event_date'           => 'date',
         'valid_until'          => 'date',
@@ -126,6 +132,11 @@ class Quote extends Model
     public function quoteLines(): HasMany
     {
         return $this->hasMany(QuoteLine::class);
+    }
+
+    public function statusChanges(): HasMany
+    {
+        return $this->hasMany(QuoteStatusChange::class);
     }
 
     // ──────────────────────────────────────────────

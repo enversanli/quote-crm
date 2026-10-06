@@ -31,8 +31,16 @@ class EditQuote extends EditRecord
         ];
     }
 
+    protected function beforeSave(): void
+    {
+        $this->record->statusChangeComment = $this->data['status_comment'] ?? null;
+    }
+
     protected function afterSave(): void
     {
+        $this->record->statusChangeComment = null;
+        $this->data['status_comment'] = null;
+
         QuoteResource::notifySameDayBookings($this->record);
         $this->dispatch('quotes-changed');
     }

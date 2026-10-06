@@ -11,6 +11,8 @@ class QuoteObserver
 
     public function created(Quote $quote): void
     {
+        $this->logStatusChange($quote, null);
+
         if (! $this->trello->isConfigured()) {
             return;
         }
@@ -24,6 +26,10 @@ class QuoteObserver
 
     public function updated(Quote $quote): void
     {
+        if ($quote->wasChanged('status')) {
+            $this->logStatusChange($quote, $quote->getOriginal('status'));
+        }
+
         if (! $this->trello->isConfigured() || ! $quote->trello_card_id) {
             return;
         }
@@ -54,5 +60,18 @@ class QuoteObserver
             'customer_company', 'event_date', 'hours', 'hourly_rate', 'venue_subtotal'])) {
             $this->trello->updateCard($cardId, $quote);
         }
+    }
+
+    /** One quote_status_changes row per status step, carrying the optional comment from the form. */
+    private function logStatusChange(Quote $quote, ?string $fromStatus): void
+    {
+        $quote->statusChanges()->create([
+            'from_status' => $fromStatus,
+            'to_status'   => $quote->status ?? 'draft',
+            'comment'     => filled($quote->statusChangeComment) ? $quote->statusChangeComment : null,
+            'user_id'     => auth()->id(),
+        ]);
+
+        $quote->statusChangeComment = null;
     }
 }
